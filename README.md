@@ -121,6 +121,8 @@ npm install
 npm run dev
 ```
 
+---
+
 ## Vision
 
 SGuard aims to make campus security and movement management smarter, faster, and fully digital.
