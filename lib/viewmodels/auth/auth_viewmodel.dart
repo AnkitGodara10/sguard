@@ -209,4 +209,43 @@ class AuthViewModel extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  // ── Mock Support Methods ──────────────────────────────────────────────────
+  // Called by the mock injection path to set state directly.
+  // In production mode these are never called.
+
+  void setMockAuth({
+    required UserRole? role,
+    required String? userId,
+    String? name,
+    String? email,
+  }) {
+    _currentRole = role;
+    _currentUserId = userId;
+    _currentUserName = name;
+    _currentUserEmail = email;
+    _state = role != null ? AuthState.authenticated : AuthState.unauthenticated;
+    notifyListeners();
+  }
+
+  void setLoading() {
+    _state = AuthState.loading;
+    _errorMessage = null;
+    notifyListeners();
+  }
+
+  void setError(String message) {
+    _state = AuthState.error;
+    _errorMessage = message;
+    notifyListeners();
+  }
+
+  void setUnauthenticated() {
+    _state = AuthState.unauthenticated;
+    _currentRole = null;
+    _currentUserId = null;
+    _currentUserName = null;
+    _currentUserEmail = null;
+    notifyListeners();
+  }
 }

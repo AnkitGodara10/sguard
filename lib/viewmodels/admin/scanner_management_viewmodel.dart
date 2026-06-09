@@ -3,7 +3,6 @@
 import 'package:flutter/foundation.dart';
 import '../../core/repositories/admin_repository.dart';
 import '../../models/scanner_model.dart';
-//import '../../models/leave_record_model.dart';
 
 class ScannerManagementViewModel extends ChangeNotifier {
   final AdminRepository _adminRepository;

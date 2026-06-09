@@ -121,7 +121,7 @@ class _SlHistoryTab extends StatelessWidget {
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: vm.slRecords.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (_, i) => _SlRecordCard(record: vm.slRecords[i]),
       ),
     );
@@ -209,7 +209,7 @@ class _LeaveHistoryTab extends StatelessWidget {
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: vm.leaveRecords.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (_, i) => _LeaveRecordCard(record: vm.leaveRecords[i]),
       ),
     );

@@ -26,6 +26,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../core/constants/app_strings.dart' show AppStrings;
 import '../../core/repositories/student_repository.dart';
 import '../../core/utils/date_formatter.dart';
 import '../../models/qr_model.dart';
@@ -200,14 +201,4 @@ class GenerateSlQrViewModel extends ChangeNotifier {
     _cancelTimer();
     super.dispose();
   }
-}
-
-// Moved constant here to avoid import cycle — matches AppStrings
-class AppStrings {
-  static const String qrSubtitle = 'Show this to the gate scanner';
-  static const String qrScannedOnce = 'Exit recorded. Show this on return.';
-  static const String qrScannedTwice =
-      'Entry recorded. You are back on campus.';
-  static const String qrExpiredMessage =
-      'This QR code has expired. Please generate a new one.';
 }

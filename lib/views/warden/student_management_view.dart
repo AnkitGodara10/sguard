@@ -124,7 +124,7 @@ class _StudentManagementContentState extends State<_StudentManagementContent> {
                 : ListView.separated(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: vm.filteredStudents.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (_, i) => _StudentTile(
                       student: vm.filteredStudents[i],
                       onTap: () => _showStudentDetail(

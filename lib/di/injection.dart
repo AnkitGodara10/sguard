@@ -1,42 +1,32 @@
 // FILE: lib/di/injection.dart
 //
 // PURPOSE:
-//   Configures the dependency injection (DI) container using GetIt.
-//   GetIt is a service locator — it stores singleton or factory instances
-//   of services, repositories, and viewmodels and provides them on demand.
+//   Single-file DI configuration for SGuard.
+//   Supports mock mode (no backend) and production mode (real API).
 //
-// WHY DEPENDENCY INJECTION:
-//   Without DI:
-//     - Every class creates its own dependencies (tight coupling)
-//     - Testing requires mocking internal classes
-//     - Hard to swap implementations
-//
-//   With DI:
-//     - Dependencies are injected from outside (loose coupling)
-//     - Easy to swap real API client with a mock for testing
-//     - All wiring is in one place
-//
-// REGISTRATION TYPES:
-//   registerSingleton — One instance for the app lifetime (ApiClient, Storage)
-//   registerFactory — New instance each time (ViewModels — because they hold
-//     screen-specific state and must be fresh for each screen visit)
-//   registerLazySingleton — Created only when first accessed (repositories)
-//
-// HOW IT WORKS:
-//   main.dart calls initializeDependencies() before runApp().
-//   Widgets access instances via getIt<T>() or context.read<T>() (for
-//   Provider-wrapped ViewModels).
+// ══════════════════════════════════════════════════════════
+//   🔧 SET THIS FLAG TO SWITCH BETWEEN MOCK AND REAL DATA
+const bool _useMockData = true;
+//   true  → Mock repos, no network needed, use passwords:
+//           student123 / warden123 / admin123
+//   false → Real API at AppConstants.apiBaseUrl
+// ══════════════════════════════════════════════════════════
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 
 import '../core/services/api_client.dart';
+import '../core/services/connectivity_service.dart';
 import '../core/services/notification_service.dart';
 import '../core/services/secure_storage_service.dart';
 import '../core/repositories/auth_repository.dart';
+import '../core/repositories/mock_auth_repository.dart';
 import '../core/repositories/student_repository.dart';
+import '../core/repositories/mock_student_repository.dart';
 import '../core/repositories/warden_repository.dart';
+import '../core/repositories/mock_warden_repository.dart';
 import '../core/repositories/admin_repository.dart';
+import '../core/repositories/mock_admin_repository.dart';
 import '../viewmodels/auth/auth_viewmodel.dart';
 import '../viewmodels/student/student_dashboard_viewmodel.dart';
 import '../viewmodels/student/generate_sl_qr_viewmodel.dart';
@@ -52,15 +42,15 @@ import '../viewmodels/admin/admin_student_list_viewmodel.dart';
 import '../viewmodels/admin/admin_warden_list_viewmodel.dart';
 import '../viewmodels/admin/scanner_management_viewmodel.dart';
 import '../viewmodels/admin/admin_reports_viewmodel.dart';
+import '../models/auth_model.dart';
+import '../models/user_role.dart';
 
-// Global service locator instance
 final GetIt getIt = GetIt.instance;
 
 Future<void> initializeDependencies() async {
-  // ── 1. Core Services (Singletons) ─────────────────────────────────────────
-  // These live for the entire app lifetime — only one instance ever exists.
 
-  // Secure storage wraps flutter_secure_storage
+  // ── 1. Core Services (always registered) ─────────────────────────────────
+
   getIt.registerSingleton<SecureStorageService>(
     SecureStorageService(
       storage: const FlutterSecureStorage(
@@ -69,18 +59,154 @@ Future<void> initializeDependencies() async {
     ),
   );
 
-  // API client depends on secure storage (for token injection)
-  getIt.registerSingleton<ApiClient>(
-    ApiClient(secureStorage: getIt<SecureStorageService>()),
-  );
-
-  // Notification service — initialized asynchronously
   final notificationService = NotificationService();
   await notificationService.initialize();
   getIt.registerSingleton<NotificationService>(notificationService);
 
-  // ── 2. Repositories (Lazy Singletons) ─────────────────────────────────────
-  // Created on first use. Singletons because they're stateless data providers.
+  final connectivityService = ConnectivityService();
+  await connectivityService.initialize();
+  getIt.registerSingleton<ConnectivityService>(connectivityService);
+
+  // ── 2. Conditional Repository + ViewModel Setup ───────────────────────────
+
+  if (_useMockData) {
+    _registerMock();
+  } else {
+    _registerReal();
+  }
+}
+
+// ── MOCK SETUP ────────────────────────────────────────────────────────────────
+
+void _registerMock() {
+  final mockStudentRepo = MockStudentRepository();
+  final mockWardenRepo  = MockWardenRepository();
+  final mockAdminRepo   = MockAdminRepository();
+  final secStorage      = getIt<SecureStorageService>();
+  final mockAuthRepo    = MockAuthRepository(secureStorage: secStorage);
+
+  // Singletons so state (mock QRs, leaves) persists within a session
+  getIt.registerSingleton<MockStudentRepository>(mockStudentRepo);
+  getIt.registerSingleton<MockWardenRepository>(mockWardenRepo);
+  getIt.registerSingleton<MockAdminRepository>(mockAdminRepo);
+
+  // Auth ViewModel — uses a subclass that routes calls to MockAuthRepository
+  getIt.registerSingleton<AuthViewModel>(
+    MockAuthViewModel(mockAuthRepo: mockAuthRepo),
+  );
+
+  // ── Student ViewModels ───────────────────────────────────────────────────
+  getIt.registerFactory<StudentDashboardViewModel>(
+    () => StudentDashboardViewModel(
+      studentRepository: StudentRepository.fromMock(
+        getIt<MockStudentRepository>(),
+      ),
+    ),
+  );
+  getIt.registerFactory<GenerateSlQrViewModel>(
+    () => GenerateSlQrViewModel(
+      studentRepository: StudentRepository.fromMock(
+        getIt<MockStudentRepository>(),
+      ),
+    ),
+  );
+  getIt.registerFactory<RequestLeaveViewModel>(
+    () => RequestLeaveViewModel(
+      studentRepository: StudentRepository.fromMock(
+        getIt<MockStudentRepository>(),
+      ),
+    ),
+  );
+  getIt.registerFactory<StudentHistoryViewModel>(
+    () => StudentHistoryViewModel(
+      studentRepository: StudentRepository.fromMock(
+        getIt<MockStudentRepository>(),
+      ),
+    ),
+  );
+  getIt.registerFactory<StudentProfileViewModel>(
+    () => StudentProfileViewModel(
+      studentRepository: StudentRepository.fromMock(
+        getIt<MockStudentRepository>(),
+      ),
+    ),
+  );
+
+  // ── Warden ViewModels ────────────────────────────────────────────────────
+  getIt.registerFactory<WardenDashboardViewModel>(
+    () => WardenDashboardViewModel(
+      wardenRepository: WardenRepository.fromMock(
+        getIt<MockWardenRepository>(),
+      ),
+    ),
+  );
+  getIt.registerFactory<LeaveRequestsViewModel>(
+    () => LeaveRequestsViewModel(
+      wardenRepository: WardenRepository.fromMock(
+        getIt<MockWardenRepository>(),
+      ),
+      notificationService: getIt<NotificationService>(),
+    ),
+  );
+  getIt.registerFactory<StudentManagementViewModel>(
+    () => StudentManagementViewModel(
+      wardenRepository: WardenRepository.fromMock(
+        getIt<MockWardenRepository>(),
+      ),
+    ),
+  );
+  getIt.registerFactory<WardenOwnLeaveViewModel>(
+    () => WardenOwnLeaveViewModel(
+      wardenRepository: WardenRepository.fromMock(
+        getIt<MockWardenRepository>(),
+      ),
+    ),
+  );
+
+  // ── Admin ViewModels ─────────────────────────────────────────────────────
+  getIt.registerFactory<AdminDashboardViewModel>(
+    () => AdminDashboardViewModel(
+      adminRepository: AdminRepository.fromMock(
+        getIt<MockAdminRepository>(),
+      ),
+    ),
+  );
+  getIt.registerFactory<AdminStudentListViewModel>(
+    () => AdminStudentListViewModel(
+      adminRepository: AdminRepository.fromMock(
+        getIt<MockAdminRepository>(),
+      ),
+    ),
+  );
+  getIt.registerFactory<AdminWardenListViewModel>(
+    () => AdminWardenListViewModel(
+      adminRepository: AdminRepository.fromMock(
+        getIt<MockAdminRepository>(),
+      ),
+    ),
+  );
+  getIt.registerFactory<ScannerManagementViewModel>(
+    () => ScannerManagementViewModel(
+      adminRepository: AdminRepository.fromMock(
+        getIt<MockAdminRepository>(),
+      ),
+    ),
+  );
+  getIt.registerFactory<AdminReportsViewModel>(
+    () => AdminReportsViewModel(
+      adminRepository: AdminRepository.fromMock(
+        getIt<MockAdminRepository>(),
+      ),
+    ),
+  );
+}
+
+// ── REAL SETUP ────────────────────────────────────────────────────────────────
+
+void _registerReal() {
+  getIt.registerSingleton<ApiClient>(
+    ApiClient(secureStorage: getIt<SecureStorageService>()),
+  );
 
   getIt.registerLazySingleton<AuthRepository>(
     () => AuthRepository(
@@ -88,96 +214,130 @@ Future<void> initializeDependencies() async {
       secureStorage: getIt<SecureStorageService>(),
     ),
   );
-
   getIt.registerLazySingleton<StudentRepository>(
     () => StudentRepository(apiClient: getIt<ApiClient>()),
   );
-
   getIt.registerLazySingleton<WardenRepository>(
     () => WardenRepository(apiClient: getIt<ApiClient>()),
   );
-
   getIt.registerLazySingleton<AdminRepository>(
     () => AdminRepository(apiClient: getIt<ApiClient>()),
   );
-
-  // ── 3. ViewModels (Factories or Singletons) ────────────────────────────────
-  //
-  // AuthViewModel is a SINGLETON because it's provided at the app root level
-  // (in app.dart's MultiProvider) and must persist across navigation.
-  //
-  // All other ViewModels are FACTORIES — a new instance is created each time
-  // the view is visited. This ensures state is clean on each navigation.
-  // They are provided locally in each view using ChangeNotifierProvider.
 
   getIt.registerSingleton<AuthViewModel>(
     AuthViewModel(authRepository: getIt<AuthRepository>()),
   );
 
-  // Student ViewModels
   getIt.registerFactory<StudentDashboardViewModel>(
-    () => StudentDashboardViewModel(
-      studentRepository: getIt<StudentRepository>(),
-    ),
+    () => StudentDashboardViewModel(studentRepository: getIt<StudentRepository>()),
   );
-
   getIt.registerFactory<GenerateSlQrViewModel>(
     () => GenerateSlQrViewModel(studentRepository: getIt<StudentRepository>()),
   );
-
   getIt.registerFactory<RequestLeaveViewModel>(
     () => RequestLeaveViewModel(studentRepository: getIt<StudentRepository>()),
   );
-
   getIt.registerFactory<StudentHistoryViewModel>(
-    () =>
-        StudentHistoryViewModel(studentRepository: getIt<StudentRepository>()),
+    () => StudentHistoryViewModel(studentRepository: getIt<StudentRepository>()),
   );
-
   getIt.registerFactory<StudentProfileViewModel>(
-    () =>
-        StudentProfileViewModel(studentRepository: getIt<StudentRepository>()),
+    () => StudentProfileViewModel(studentRepository: getIt<StudentRepository>()),
   );
-
-  // Warden ViewModels
   getIt.registerFactory<WardenDashboardViewModel>(
     () => WardenDashboardViewModel(wardenRepository: getIt<WardenRepository>()),
   );
-
   getIt.registerFactory<LeaveRequestsViewModel>(
     () => LeaveRequestsViewModel(
       wardenRepository: getIt<WardenRepository>(),
       notificationService: getIt<NotificationService>(),
     ),
   );
-
   getIt.registerFactory<StudentManagementViewModel>(
-    () =>
-        StudentManagementViewModel(wardenRepository: getIt<WardenRepository>()),
+    () => StudentManagementViewModel(wardenRepository: getIt<WardenRepository>()),
   );
-
   getIt.registerFactory<WardenOwnLeaveViewModel>(
     () => WardenOwnLeaveViewModel(wardenRepository: getIt<WardenRepository>()),
   );
-
-  // Admin ViewModels
   getIt.registerFactory<AdminDashboardViewModel>(
     () => AdminDashboardViewModel(adminRepository: getIt<AdminRepository>()),
   );
-
   getIt.registerFactory<AdminStudentListViewModel>(
     () => AdminStudentListViewModel(adminRepository: getIt<AdminRepository>()),
   );
-
   getIt.registerFactory<AdminWardenListViewModel>(
     () => AdminWardenListViewModel(adminRepository: getIt<AdminRepository>()),
   );
-
   getIt.registerFactory<ScannerManagementViewModel>(
     () => ScannerManagementViewModel(adminRepository: getIt<AdminRepository>()),
   );
-
   getIt.registerFactory<AdminReportsViewModel>(
     () => AdminReportsViewModel(adminRepository: getIt<AdminRepository>()),
   );
+}
+
+// ── MockAuthViewModel ─────────────────────────────────────────────────────────
+// Subclass of AuthViewModel that uses MockAuthRepository.
+// Overrides login() and logout() to call the mock instead of the real repo.
+
+class MockAuthViewModel extends AuthViewModel {
+  final MockAuthRepository _mockRepo;
+
+  MockAuthViewModel({required MockAuthRepository mockAuthRepo})
+      : _mockRepo = mockAuthRepo,
+        super(authRepository: _NoOpAuthRepository()) {
+    _restoreSession();
+  }
+
+  Future<void> _restoreSession() async {
+    final loggedIn = await _mockRepo.isLoggedIn();
+    if (loggedIn) {
+      final role   = await _mockRepo.getStoredRole();
+      final userId = await _mockRepo.getStoredUserId();
+      setMockAuth(role: role, userId: userId);
+    } else {
+      setUnauthenticated();
+    }
+  }
+
+  @override
+  Future<bool> login({
+    required String email,
+    required String password,
+    required UserRole role,
+  }) async {
+    setLoading();
+    final result = await _mockRepo.login(
+      LoginRequest(email: email, password: password, role: role),
+    );
+    if (result.isSuccess) {
+      final resp = result.data;
+      setMockAuth(
+        role: resp.role,
+        userId: resp.userId,
+        name: resp.name,
+        email: resp.email,
+      );
+      return true;
+    }
+    setError(result.error);
+    return false;
+  }
+
+  @override
+  Future<void> logout() async {
+    await _mockRepo.logout();
+    setUnauthenticated();
+  }
+}
+
+// A no-op AuthRepository that satisfies the super() constructor.
+// None of its methods are ever called when in mock mode.
+// We pass the already-registered SecureStorageService from getIt.
+class _NoOpAuthRepository extends AuthRepository {
+  _NoOpAuthRepository()
+      : super(
+          // ApiClient won't be used — pass a stub storage just to compile
+          apiClient: ApiClient(secureStorage: getIt<SecureStorageService>()),
+          secureStorage: getIt<SecureStorageService>(),
+        );
 }

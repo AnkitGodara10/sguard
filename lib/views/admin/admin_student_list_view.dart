@@ -107,7 +107,7 @@ class _AdminStudentListContentState extends State<_AdminStudentListContent> {
                 : ListView.separated(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: vm.filteredStudents.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (_, i) =>
                         _StudentMasterCard(student: vm.filteredStudents[i]),
                   ),

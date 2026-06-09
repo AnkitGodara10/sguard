@@ -93,7 +93,7 @@ class _AdminWardenListContentState extends State<_AdminWardenListContent> {
                 : ListView.separated(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: vm.filteredWardens.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (_, i) =>
                         _WardenMasterCard(warden: vm.filteredWardens[i]),
                   ),

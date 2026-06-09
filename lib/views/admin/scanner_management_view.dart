@@ -86,7 +86,7 @@ class _ScannerManagementContentState extends State<_ScannerManagementContent> {
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: vm.scanners.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
               itemBuilder: (_, i) => _ScannerCard(
                 scanner: vm.scanners[i],
                 onDeactivate: () => vm.deactivateScanner(vm.scanners[i].id),
